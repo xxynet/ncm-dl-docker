@@ -14,23 +14,23 @@ NCM_DIR = "/app/ncm"
 SCRAPE_DIR = "/app/scrape"
 
 
-def check_directory_mounted(directory):
-    if not os.path.exists(directory):
-        print(f"⚠目录 {directory} 不存在，请确保挂载了 Volume！")
-        return False
-    if not os.listdir(directory):
-        print(f"⚠目录 {directory} 为空，可能未正确挂载 Volume！")
-        return False
-    return True
-
-
-if not all([
-    check_directory_mounted(PLAYLIST_DIR),
-    check_directory_mounted(NCM_DIR),
-    check_directory_mounted(SCRAPE_DIR),
-]):
-    print("❌ 检测到未挂载 Volume，程序可能无法正常运行！")
-    sys.exit(1)
+# def check_directory_mounted(directory):
+#     if not os.path.exists(directory):
+#         print(f"⚠目录 {directory} 不存在，请确保挂载了 Volume！")
+#         return False
+#     if not os.listdir(directory):
+#         print(f"⚠目录 {directory} 为空，可能未正确挂载 Volume！")
+#         return False
+#     return True
+#
+#
+# if not all([
+#     check_directory_mounted(PLAYLIST_DIR),
+#     check_directory_mounted(NCM_DIR),
+#     check_directory_mounted(SCRAPE_DIR),
+# ]):
+#     print("❌ 检测到未挂载 Volume，程序可能无法正常运行！")
+#     sys.exit(1)
 
 app = Flask(__name__)
 
@@ -323,5 +323,5 @@ def format_file_size(size_bytes):
     return f"{s} {size_names[i]}"
 
 
-# if __name__ == '__main__':
-#     app.run(host="0.0.0.0", port=5266)
+if __name__ == '__main__':
+    app.run(host="0.0.0.0", port=5266)

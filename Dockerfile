@@ -13,9 +13,8 @@ RUN pip install --no-cache-dir \
     --trusted-host pypi.tuna.tsinghua.edu.cn \
     --timeout=60 \
     --retries=3 \
-    gunicorn gevent \
     -r requirements.txt
 
 COPY . .
 
-CMD ["gunicorn", "-c", "gunicorn_conf.py", "app:app"]
+CMD ["python", "app.py"]
