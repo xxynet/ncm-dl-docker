@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NCM Downloader</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='layui/css/layui.css') }}">
+    <style>
+        .main-container {
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 8px;
+        }
+        .tab-content {
+            min-height: 500px;
+        }
+        .song-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #f0f0f0;
+            transition: background-color 0.3s;
+        }
+        .song-item:hover {
+            background-color: #f8f9fa;
+        }
+        .song-info {
+            flex: 1;
+            margin-left: 15px;
+        }
+        .song-title {
+            font-weight: bold;
+            color: #333;
+        }
+        .song-artist {
+            color: #666;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+        .progress-container {
+            margin: 20px 0;
+        }
+        .file-list {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #e6e6e6;
+            border-radius: 4px;
+            padding: 10px;
+        }
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 12px;
+            border-bottom: 1px solid #f0f0f0;
+            transition: background-color 0.3s;
+        }
+        
+        .file-item:hover {
+            background-color: #f8f9fa;
+        }
+        .file-item:last-child {
+            border-bottom: none;
+        }
+        .status-success {
+            color: #5FB878;
+        }
+        .status-error {
+            color: #FF5722;
+        }
+        .status-pending {
+            color: #FFB800;
+        }
+        .cover-preview {
+            width: 60px;
+            height: 60px;
+            border-radius: 4px;
+            object-fit: cover;
+        }
+        .batch-actions {
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+        .pagination-info {
+            margin: 10px 0;
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <!-- 头部 -->
+        <div class="header">
+            <h1><i class="layui-icon layui-icon-music"></i> 网易云音乐下载器</h1>
+            <p>支持歌单下载、NCM转换、音乐刮削</p>
+        </div>
+
+        <!-- 标签页 -->
+        <div class="layui-tab layui-tab-brief" lay-filter="mainTab">
+            <ul class="layui-tab-title">
+                <li class="layui-this">歌单下载</li>
+                <li>NCM转换</li>
+                <li>音乐刮削</li>
+            </ul>
+            <div class="layui-tab-content">
+                <!-- 歌单下载页面 -->
+                <div class="layui-tab-item layui-show">
+                    <div class="layui-card">
+                        <div class="layui-card-header">
+                            <h3><i class="layui-icon layui-icon-list"></i> 歌单下载</h3>
+                        </div>
+                        <div class="layui-card-body">
+                            <form class="layui-form" id="playlistForm">
+                                <div class="layui-form-item">
+                                    <label class="layui-form-label">歌单URL</label>
+                                    <div class="layui-input-block">
+                                        <input type="text" name="playlistUrl" placeholder="请输入网易云音乐歌单链接或ID" 
+                                               class="layui-input" required>
+                                    </div>
+                                </div>
+                                <div class="layui-form-item">
+                                    <div class="layui-input-block">
+                                        <button class="layui-btn" lay-submit lay-filter="getPlaylist">
+                                            <i class="layui-icon layui-icon-search"></i> 获取歌单信息
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+
+                            <!-- 歌单信息显示 -->
+                            <div id="playlistInfo" style="display: none;">
+                                <div class="layui-row">
+                                    <div class="layui-col-md3">
+                                        <img id="playlistCover" class="cover-preview" src="" alt="歌单封面">
+                                    </div>
+                                    <div class="layui-col-md9">
+                                        <h4 id="playlistName"></h4>
+                                        <p id="playlistDesc"></p>
+                                        <p>歌曲数量: <span id="songCount">0</span></p>
+                                    </div>
+                                </div>
+
+                                <!-- 批量操作 -->
+                                <div class="batch-actions">
+                                    <button class="layui-btn layui-btn-normal" id="selectAll">
+                                        <i class="layui-icon layui-icon-ok"></i> 全选本页
+                                    </button>
+                                    <button class="layui-btn layui-btn-normal" id="selectAllPages">
+                                        <i class="layui-icon layui-icon-ok"></i> 全选所有
+                                    </button>
+                                    <button class="layui-btn layui-btn-warm" id="downloadSelected">
+                                        <i class="layui-icon layui-icon-download-circle"></i> 下载选中
+                                    </button>
+                                    <button class="layui-btn layui-btn-primary" id="clearSelection">
+                                        <i class="layui-icon layui-icon-close"></i> 清除选择
+                                    </button>
+                                </div>
+
+                                <!-- 歌曲列表 -->
+                                <div id="songList"></div>
+                                
+                                <!-- 分页信息 -->
+                                <div id="paginationInfo" style="display: none;" class="pagination-info">
+                                    <p>共 <span id="totalSongs">0</span> 首歌曲，当前显示第 <span id="currentPageInfo">1</span> 页，每页 <span id="pageSizeInfo">20</span> 首，已选择 <span id="selectedCount">0</span> 首</p>
+                                </div>
+                                
+                                <!-- 分页组件 -->
+                                <div id="pagination" style="display: none; text-align: center; margin-top: 20px;"></div>
+
+                                <!-- 下载进度 -->
+                                <div id="downloadProgress" style="display: none;">
+                                    <div class="progress-container">
+                                        <div class="layui-progress layui-progress-big" lay-filter="downloadProgress">
+                                            <div class="layui-progress-bar" lay-percent="0%"></div>
+                                        </div>
+                                        <p id="progressText">准备下载...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- NCM转换页面 -->
+                <div class="layui-tab-item">
+                    <div class="layui-card">
+                        <div class="layui-card-header">
+                            <h3><i class="layui-icon layui-icon-refresh"></i> NCM文件转换</h3>
+                        </div>
+                        <div class="layui-card-body">
+                            <form class="layui-form" id="ncmForm">
+                                <div class="layui-form-item">
+                                    <div class="layui-input-block">
+                                        <button type="button" class="layui-btn" id="convertNcm">
+                                            <i class="layui-icon layui-icon-refresh"></i> 开始转换
+                                        </button>
+                                        <button type="button" class="layui-btn layui-btn-primary" id="scanNcmFiles">
+                                            <i class="layui-icon layui-icon-search"></i> 扫描文件
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+
+                            <!-- NCM文件列表 -->
+                            <div id="ncmFileList" style="display: none;">
+                                <h4>转换的文件:</h4>
+                                <div class="file-list" id="ncmFiles"></div>
+                            </div>
+
+                            <!-- 转换进度 -->
+                            <div id="convertProgress" style="display: none;">
+                                <div class="progress-container">
+                                    <div class="layui-progress layui-progress-big" lay-filter="convertProgress">
+                                        <div class="layui-progress-bar" lay-percent="0%"></div>
+                                    </div>
+                                    <p id="convertText">准备转换...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 音乐刮削页面 -->
+                <div class="layui-tab-item">
+                    <div class="layui-card">
+                        <div class="layui-card-header">
+                            <h3><i class="layui-icon layui-icon-picture"></i> 音乐刮削</h3>
+                        </div>
+                        <div class="layui-card-body">
+                            <div class="layui-form-item">
+                                <div class="layui-input-block">
+                                                                            <button type="button" class="layui-btn" id="startScrapeBtn">
+                                            <i class="layui-icon layui-icon-picture"></i> 开始刮削
+                                        </button>
+                                    <button type="button" class="layui-btn layui-btn-primary" id="scanMusicFiles">
+                                        <i class="layui-icon layui-icon-search"></i> 扫描音乐
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- 音乐文件列表 -->
+                            <div id="musicFileList" style="display: none;">
+                                <h4>发现的音乐文件:</h4>
+                                <div class="file-list" id="musicFiles"></div>
+                            </div>
+
+                            <!-- 刮削进度 -->
+                            <div id="scrapeProgress" style="display: none;">
+                                <div class="progress-container">
+                                    <div class="layui-progress layui-progress-big" lay-filter="scrapeProgress">
+                                        <div class="layui-progress-bar" lay-percent="0%"></div>
+                                    </div>
+                                    <p id="scrapeText">准备刮削...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='layui/layui.js') }}"></script>
+    <script>
+        layui.use(['element', 'form', 'layer', 'upload', 'laypage'], function(){
+            var element = layui.element;
+            var form = layui.form;
+            var layer = layui.layer;
+            var upload = layui.upload;
+            var laypage = layui.laypage;
+            
+            // 全局变量存储歌曲数据
+            var allSongs = [];
+            var currentPage = 1;
+            var pageSize = 20;
+            
+            // 将变量设置为全局变量，供downloadSingle函数使用
+            window.allSongs = allSongs;
+            window.currentPage = currentPage;
+
+            // 歌单下载功能
+            form.on('submit(getPlaylist)', function(data){
+                var url = data.field.playlistUrl;
+                if (!url) {
+                    layer.msg('请输入歌单URL或ID');
+                    return false;
+                }
+
+                // layer.load(1, {content: '获取歌单信息中...'});
+
+                var loadIndex = layer.msg('获取歌单信息中...', {
+                    icon: 16,
+                    shade: 0.01,
+                    time: 0 // 设置为0表示不自动关闭
+                    });
+                
+                // 发送请求到后端API
+                fetch('/api/playlist', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        playlistUrl: url
+                    })
+                })
+                .then(response => response.json())
+                .then(result => {
+                    // layer.closeAll('loading');
+                    layer.close(loadIndex);
+                    
+                    if (result.status === 'success') {
+                        displayPlaylist(result.data);
+                    } else {
+                        layer.msg(result.message || '获取歌单信息失败', {icon: 2});
+                    }
+                })
+                .catch(error => {
+                    // layer.closeAll('loading');
+                    layer.close(loadIndex);
+                    layer.msg('网络错误: ' + error.message, {icon: 2});
+                });
+
+                return false;
+            });
+
+            function displayPlaylist(data) {
+                document.getElementById('playlistInfo').style.display = 'block';
+                document.getElementById('playlistName').textContent = data.name;
+                document.getElementById('playlistDesc').textContent = data.desc;
+                document.getElementById('playlistCover').src = data.cover;
+                document.getElementById('songCount').textContent = data.songs.length;
+
+                // 存储所有歌曲数据
+                allSongs = data.songs;
+                currentPage = 1;
+                
+                // 更新全局变量
+                window.allSongs = allSongs;
+                window.currentPage = currentPage;
+                
+                // 渲染第一页
+                renderSongPage(1);
+                
+                // 初始化分页
+                initPagination();
+            }
+            
+            function renderSongPage(page) {
+                var startIndex = (page - 1) * pageSize;
+                var endIndex = startIndex + pageSize;
+                var pageSongs = allSongs.slice(startIndex, endIndex);
+                
+                var songListHtml = '';
+                pageSongs.forEach(function(song) {
+                    var checked = song.selected ? 'checked' : '';
+                    var buttonHtml = getDownloadButtonHtml(song);
+                    songListHtml += `
+                        <div class="song-item" data-song-id="${song.id}">
+                            <input type="checkbox" name="songSelect" value="${song.id}" lay-skin="primary" ${checked}>
+                            <div class="song-info">
+                                <div class="song-title">${song.title}</div>
+                                <div class="song-artist">${song.artist} - ${song.album}</div>
+                            </div>
+                            <span class="layui-badge layui-bg-gray">${song.duration}</span>
+                            ${buttonHtml}
+                        </div>
+                    `;
+                });
+                document.getElementById('songList').innerHTML = songListHtml;
+                form.render('checkbox');
+                
+                // 绑定复选框变化事件
+                bindCheckboxEvents();
+            }
+            
+            // 将renderSongPage设置为全局函数
+            window.renderSongPage = renderSongPage;
+            
+            function getDownloadButtonHtml(song) {
+                var status = song.downloadStatus || 'default';
+                var buttonClass = 'layui-btn layui-btn-xs';
+                var iconClass = 'layui-icon layui-icon-download';
+                var text = '下载';
+                var disabled = '';
+                var onclick = `onclick="downloadSingle('${song.id}')"`;
+                var title = '';
+                
+                switch(status) {
+                    case 'downloading':
+                        buttonClass = 'layui-btn layui-btn-xs layui-btn-disabled';
+                        iconClass = 'layui-icon layui-icon-loading layui-anim layui-anim-rotate layui-anim-loop';
+                        text = '下载中';
+                        disabled = 'disabled';
+                        onclick = '';
+                        break;
+                    case 'downloaded':
+                        buttonClass = 'layui-btn layui-btn-xs layui-btn-normal';
+                        iconClass = 'layui-icon layui-icon-ok';
+                        text = '已下载';
+                        disabled = 'disabled';
+                        onclick = '';
+                        break;
+                    case 'failed':
+                        buttonClass = 'layui-btn layui-btn-xs layui-btn-danger';
+                        iconClass = 'layui-icon layui-icon-close';
+                        text = '下载失败';
+                        onclick = `onclick="downloadSingle('${song.id}')"`;
+                        title = song.downloadError ? `title="${song.downloadError}"` : '';
+                        break;
+                }
+                
+                return `<button class="${buttonClass}" data-song-id="${song.id}" ${disabled} ${onclick} ${title}>
+                    <i class="${iconClass}"></i> ${text}
+                </button>`;
+            }
+            
+            function bindCheckboxEvents() {
+                var checkboxes = document.querySelectorAll('input[name="songSelect"]');
+                checkboxes.forEach(function(checkbox) {
+                    checkbox.addEventListener('change', function() {
+                        var songId = this.value;
+                        var song = allSongs.find(function(s) { return s.id == songId; });
+                        if (song) {
+                            song.selected = this.checked;
+                        }
+                        updateSelectedCount();
+                    });
+                });
+            }
+            
+            function updateSelectedCount() {
+                var selectedCount = allSongs.filter(function(song) {
+                    return song.selected;
+                }).length;
+                document.getElementById('selectedCount').textContent = selectedCount;
+            }
+            
+            function initPagination() {
+                var totalPages = Math.ceil(allSongs.length / pageSize);
+                
+                // 更新分页信息
+                document.getElementById('totalSongs').textContent = allSongs.length;
+                document.getElementById('currentPageInfo').textContent = currentPage;
+                document.getElementById('pageSizeInfo').textContent = pageSize;
+                document.getElementById('paginationInfo').style.display = 'block';
+                updateSelectedCount();
+                
+                if (totalPages <= 1) {
+                    document.getElementById('pagination').style.display = 'none';
+                    return;
+                }
+                
+                document.getElementById('pagination').style.display = 'block';
+                
+                laypage.render({
+                    elem: 'pagination',
+                    count: allSongs.length,
+                    limit: pageSize,
+                    curr: currentPage,
+                    layout: ['count', 'prev', 'page', 'next', 'limit', 'skip'],
+                    jump: function(obj, first) {
+                        if (!first) {
+                            currentPage = obj.curr;
+                            window.currentPage = currentPage;
+                            document.getElementById('currentPageInfo').textContent = currentPage;
+                            renderSongPage(currentPage);
+                        }
+                    }
+                });
+            }
+
+            // 全选本页功能
+            document.getElementById('selectAll').addEventListener('click', function(){
+                var checkboxes = document.querySelectorAll('input[name="songSelect"]');
+                checkboxes.forEach(function(checkbox) {
+                    checkbox.checked = true;
+                    // 更新歌曲的选中状态
+                    var songId = checkbox.value;
+                    var song = allSongs.find(function(s) { return s.id == songId; });
+                    if (song) {
+                        song.selected = true;
+                    }
+                });
+                form.render('checkbox');
+                updateSelectedCount();
+            });
+
+            // 全选所有页面功能
+            document.getElementById('selectAllPages').addEventListener('click', function(){
+                // 遍历所有歌曲，设置选中状态
+                allSongs.forEach(function(song) {
+                    song.selected = true;
+                });
+                // 重新渲染当前页面
+                renderSongPage(currentPage);
+                updateSelectedCount();
+                layer.msg('已全选所有歌曲', {icon: 1});
+            });
+
+            // 清除选择
+            document.getElementById('clearSelection').addEventListener('click', function(){
+                var checkboxes = document.querySelectorAll('input[name="songSelect"]');
+                checkboxes.forEach(function(checkbox) {
+                    checkbox.checked = false;
+                });
+                // 清除全局选择状态
+                allSongs.forEach(function(song) {
+                    song.selected = false;
+                });
+                form.render('checkbox');
+                updateSelectedCount();
+            });
+
+            // 下载选中
+            document.getElementById('downloadSelected').addEventListener('click', function(){
+                // 获取所有选中的歌曲（包括其他页面的）
+                var selectedSongs = allSongs.filter(function(song) {
+                    return song.selected;
+                });
+                
+                if (selectedSongs.length === 0) {
+                    layer.msg('请选择歌曲');
+                    return;
+                }
+
+                // 获取选中的歌曲ID
+                var songIds = selectedSongs.map(function(song) {
+                    return song.id;
+                });
+
+                // 更新选中歌曲的下载状态为下载中
+                songIds.forEach(function(songId) {
+                    var song = allSongs.find(function(s) { return s.id == songId; });
+                    if (song) {
+                        song.downloadStatus = 'downloading';
+                    }
+                });
+                
+                // 重新渲染当前页面以更新按钮状态
+                renderSongPage(currentPage);
+
+                // 获取歌单名称
+                var playlistName = document.getElementById('playlistName').textContent || '未知歌单';
+
+                // 发送下载请求到后端
+                fetch('/api/download', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        songIds: songIds,
+                        playlistName: playlistName
+                    })
+                })
+                .then(response => response.json())
+                .then(result => {
+                    if (result.status === 'success') {
+                        layer.msg(result.message, {icon: 1});
+                        
+                        // 根据后端返回的结果更新每首歌的下载状态
+                        if (result.data && result.data.songResults) {
+                            result.data.songResults.forEach(function(songResult) {
+                                var song = allSongs.find(function(s) { return s.id == songResult.songId; });
+                                if (song) {
+                                    if (songResult.success) {
+                                        song.downloadStatus = 'downloaded';
+                                    } else {
+                                        song.downloadStatus = 'failed';
+                                        song.downloadError = songResult.message;
+                                    }
+                                }
+                            });
+                        }
+                        
+                        // 重新渲染当前页面
+                        renderSongPage(currentPage);
+                    } else {
+                        layer.msg(result.message || '下载失败', {icon: 2});
+                        // 下载失败，更新歌曲状态为失败
+                        songIds.forEach(function(songId) {
+                            var song = allSongs.find(function(s) { return s.id == songId; });
+                            if (song) {
+                                song.downloadStatus = 'failed';
+                            }
+                        });
+                        // 重新渲染当前页面
+                        renderSongPage(currentPage);
+                    }
+                })
+                .catch(error => {
+                    layer.msg('网络错误: ' + error.message, {icon: 2});
+                    // 网络错误，更新歌曲状态为失败
+                    songIds.forEach(function(songId) {
+                        var song = allSongs.find(function(s) { return s.id == songId; });
+                        if (song) {
+                            song.downloadStatus = 'failed';
+                        }
+                    });
+                    // 重新渲染当前页面
+                    renderSongPage(currentPage);
+                });
+            });
+
+
+
+            // NCM转换功能
+            document.getElementById('convertNcm').addEventListener('click', function(){
+                startNcmConversion();
+            });
+
+            function displayNcmFiles(files) {
+                document.getElementById('ncmFileList').style.display = 'block';
+                var html = '';
+                files.forEach(function(file) {
+                    var statusText = '已转换';
+                    var statusClass = 'status-success';
+                    
+                    // 如果文件对象有状态字段，则使用该状态
+                    if (file.status) {
+                        if (file.status === 'converted') {
+                            statusText = '已转换';
+                            statusClass = 'status-success';
+                        } else if (file.status === 'failed') {
+                            statusText = '转换失败';
+                            statusClass = 'status-error';
+                        } else if (file.status === 'converting') {
+                            statusText = '转换中';
+                            statusClass = 'status-pending';
+                        } else if (file.status === 'pending') {
+                            statusText = '待转换';
+                            statusClass = 'status-pending';
+                        }
+                    }
+                    
+                    html += `
+                        <div class="file-item">
+                            <span>${file.name || file}</span>
+                            <span class="${statusClass}">${statusText}</span>
+                        </div>
+                    `;
+                });
+                document.getElementById('ncmFiles').innerHTML = html;
+            }
+
+
+
+            function startNcmConversion() {
+                document.getElementById('convertProgress').style.display = 'block';
+                var progressBar = document.querySelector('#convertProgress .layui-progress-bar');
+                var progressText = document.getElementById('convertText');
+                
+                progressText.textContent = '开始转换...';
+                progressBar.style.width = '0%';
+
+                // 发送请求到后端API
+                fetch('/api/convert', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({})
+                })
+                .then(response => response.json())
+                .then(result => {
+                    if (result.status === 'success') {
+                        progressBar.style.width = '100%';
+                        progressText.textContent = '转换完成！';
+                        layer.msg(result.message || 'NCM转换完成！', {icon: 1});
+                        if (result.data && result.data.files) {
+                            displayNcmFiles(result.data.files);
+                        }
+                    } else {
+                        progressText.textContent = '转换失败';
+                        layer.msg(result.message || '转换失败', {icon: 2});
+                    }
+                })
+                .catch(error => {
+                    progressText.textContent = '转换失败';
+                    layer.msg('网络错误: ' + error.message, {icon: 2});
+                });
+            }
+
+            // 音乐刮削功能
+            // 由于selectMusicPath元素被注释掉了，这里也注释掉相关代码
+            // document.getElementById('selectMusicPath').addEventListener('click', function(){
+            //     layer.msg('请选择音乐文件目录');
+            //     document.querySelector('input[name="musicPath"]').value = 'D:/Music';
+            // });
+
+            document.getElementById('scanMusicFiles').addEventListener('click', function(){
+                // 由于表单元素被注释掉了，使用默认值
+                var musicPath = './Playlist'; // 默认音乐目录
+                
+                layer.load(1, {content: '扫描并刮削音乐文件中...'});
+
+                // 获取刮削选项（使用默认值）
+                var options = {
+                    scrapeCover: true,
+                    scrapeLyrics: true,
+                    scrapeInfo: true
+                };
+
+                // 发送请求到后端API
+                fetch('/api/scrape', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        musicPath: musicPath,
+                        options: options
+                    })
+                })
+                .then(response => response.json())
+                .then(result => {
+                    layer.closeAll('loading');
+                    
+                    if (result.status === 'success') {
+                        layer.msg(result.message, {icon: 1});
+                        displayMusicFiles(result.data.files);
+                        
+                        // 显示统计信息
+                        if (result.data.success_count !== undefined && result.data.failed_count !== undefined) {
+                            var statsHtml = `
+                                <div style="margin-top: 15px; padding: 10px; background-color: #f8f9fa; border-radius: 4px;">
+                                    <strong>刮削统计:</strong> 成功 ${result.data.success_count} 首，失败 ${result.data.failed_count} 首
+                                </div>
+                            `;
+                            document.getElementById('musicFileList').insertAdjacentHTML('beforeend', statsHtml);
+                        }
+                    } else {
+                        layer.msg(result.message || '扫描失败', {icon: 2});
+                    }
+                })
+                .catch(error => {
+                    layer.closeAll('loading');
+                    layer.msg('网络错误: ' + error.message, {icon: 2});
+                });
+            });
+
+            function displayMusicFiles(files) {
+                document.getElementById('musicFileList').style.display = 'block';
+                var html = '';
+                files.forEach(function(file) {
+                    var statusText = '';
+                    var statusClass = '';
+                    var songInfo = '';
+                    
+                    switch(file.status) {
+                        case 'success':
+                            statusText = '刮削成功';
+                            statusClass = 'status-success';
+                            if (file.song_name && file.artists && file.album) {
+                                songInfo = `<div style="font-size: 12px; color: #666; margin-top: 5px;">
+                                    歌曲: ${file.song_name} | 艺术家: ${file.artists.join(', ')} | 专辑: ${file.album}
+                                </div>`;
+                            }
+                            break;
+                        case 'failed':
+                            statusText = '刮削失败';
+                            statusClass = 'status-error';
+                            if (file.message) {
+                                songInfo = `<div style="font-size: 12px; color: #FF5722; margin-top: 5px;">
+                                    错误: ${file.message}
+                                </div>`;
+                            }
+                            break;
+                        case 'pending':
+                            statusText = '待刮削';
+                            statusClass = 'status-pending';
+                            break;
+                        default:
+                            statusText = '未知状态';
+                            statusClass = 'status-pending';
+                    }
+                    
+                    html += `
+                        <div class="file-item">
+                            <div style="flex: 1;">
+                                <div>${file.name} (${file.size})</div>
+                                ${songInfo}
+                            </div>
+                            <span class="${statusClass}">${statusText}</span>
+                        </div>
+                    `;
+                });
+                document.getElementById('musicFiles').innerHTML = html;
+            }
+
+            // 开始刮削按钮点击事件
+            document.getElementById('startScrapeBtn').addEventListener('click', function(e){
+                e.preventDefault();
+                e.stopPropagation();
+                startMusicScraping();
+            });
+
+            function startMusicScraping() {
+                document.getElementById('scrapeProgress').style.display = 'block';
+                var progressBar = document.querySelector('#scrapeProgress .layui-progress-bar');
+                var progressText = document.getElementById('scrapeText');
+                
+                progressText.textContent = '开始刮削...';
+                progressBar.style.width = '0%';
+
+                // 获取刮削选项（由于表单被注释，使用默认值）
+                var options = {
+                    scrapeCover: true,
+                    scrapeLyrics: true,
+                    scrapeInfo: true
+                };
+
+                // 发送请求到后端API
+                fetch('/api/scrape', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        musicPath: './Playlist', // 使用默认的音乐目录
+                        options: options
+                    })
+                })
+                .then(response => response.json())
+                .then(result => {
+                    if (result.status === 'success') {
+                        progressBar.style.width = '100%';
+                        progressText.textContent = '刮削完成！';
+                        layer.msg(result.message, {icon: 1});
+                        
+                        // 显示刮削结果
+                        displayMusicFiles(result.data.files);
+                        
+                        // 显示统计信息
+                        if (result.data.success_count !== undefined && result.data.failed_count !== undefined) {
+                            var statsHtml = `
+                                <div style="margin-top: 15px; padding: 10px; background-color: #f8f9fa; border-radius: 4px;">
+                                    <strong>刮削统计:</strong> 成功 ${result.data.success_count} 首，失败 ${result.data.failed_count} 首
+                                </div>
+                            `;
+                            document.getElementById('musicFileList').insertAdjacentHTML('beforeend', statsHtml);
+                        }
+                    } else {
+                        progressText.textContent = '刮削失败';
+                        layer.msg(result.message || '刮削失败', {icon: 2});
+                    }
+                })
+                .catch(error => {
+                    progressText.textContent = '刮削失败';
+                    layer.msg('网络错误: ' + error.message, {icon: 2});
+                });
+            }
+        });
+
+        // 单曲下载功能 - 全局函数
+        window.downloadSingle = function(songId) {
+            layui.use('layer', function(){
+                var layer = layui.layer;
+                
+                // 获取全局变量
+                var allSongs = window.allSongs || [];
+                var currentPage = window.currentPage || 1;
+                var renderSongPage = window.renderSongPage;
+                
+                // 更新歌曲下载状态
+                var song = allSongs.find(function(s) { return s.id == songId; });
+                if (song) {
+                    song.downloadStatus = 'downloading';
+                }
+                
+                // 重新渲染当前页面以更新按钮状态
+                if (typeof renderSongPage === 'function') {
+                    renderSongPage(currentPage);
+                }
+                
+                // 获取歌单名称
+                var playlistName = document.getElementById('playlistName').textContent || '未知歌单';
+                
+                // 发送单曲下载请求
+                fetch('/api/download', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        songIds: [songId],
+                        playlistName: playlistName
+                    })
+                })
+                .then(response => response.json())
+                .then(result => {
+                    if (result.status === 'success') {
+                        layer.msg(result.message, {icon: 1});
+                        
+                        // 根据后端返回的结果更新歌曲的下载状态
+                        if (result.data && result.data.songResults && result.data.songResults.length > 0) {
+                            var songResult = result.data.songResults[0];
+                            if (songResult.success) {
+                                if (song) {
+                                    song.downloadStatus = 'downloaded';
+                                }
+                            } else {
+                                if (song) {
+                                    song.downloadStatus = 'failed';
+                                    song.downloadError = songResult.message;
+                                }
+                            }
+                        }
+                        
+                        // 重新渲染当前页面
+                        if (typeof renderSongPage === 'function') {
+                            renderSongPage(currentPage);
+                        }
+                    } else {
+                        layer.msg(result.message || '下载失败', {icon: 2});
+                        // 下载失败，更新歌曲状态为失败
+                        if (song) {
+                            song.downloadStatus = 'failed';
+                        }
+                        // 重新渲染当前页面
+                        if (typeof renderSongPage === 'function') {
+                            renderSongPage(currentPage);
+                        }
+                    }
+                })
+                .catch(error => {
+                    layer.msg('网络错误: ' + error.message, {icon: 2});
+                    // 网络错误，更新歌曲状态为失败
+                    if (song) {
+                        song.downloadStatus = 'failed';
+                    }
+                    // 重新渲染当前页面
+                    if (typeof renderSongPage === 'function') {
+                        renderSongPage(currentPage);
+                    }
+                });
+            });
+        };
+
+
+    </script>
+</body>
+</html>
