@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  ncm-dl:
+    image: xxynet/ncm-dl:1.0
+    container_name: ncm-dl
+    ports:
+      - "5266:5266"
+    volumes:
+      - "/path/to/your/playlist/dir:/app/playlist"
+      - "/path/to/your/ncm_file/dir:/app/ncm"
+      - "/path/to/your/to_scrape_music/dir:/app/scrape"
+    restart: unless-stopped
