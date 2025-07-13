@@ -1,8 +1,7 @@
 version: '3.8'
-
 services:
   ncm-dl:
-    image: xxynet/ncm-dl:1.0
+    image: xxynet/ncm-dl:latest
     container_name: ncm-dl
     ports:
       - "5266:5266"
